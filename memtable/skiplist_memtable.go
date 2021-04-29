@@ -22,15 +22,15 @@ type node struct {
 	next   []*node
 }
 
-type memTable struct {
+type skiplistMemTable struct {
 	head    *node
 	randGen *rand.Rand
 	mu      sync.Mutex
 	size    uint64
 }
 
-func NewSkiplistMemtable() *memTable {
-	return &memTable{
+func NewSkiplistMemtable() *skiplistMemTable {
+	return &skiplistMemTable{
 		head: &node{
 			record: MemTableRecord{},
 			next:   make([]*node, maxHeight),
@@ -40,7 +40,7 @@ func NewSkiplistMemtable() *memTable {
 	}
 }
 
-func (m *memTable) PrintLinkedList() {
+func (m *skiplistMemTable) PrintLinkedList() {
 	cn := m.head
 	for cn != nil {
 		fmt.Println(cn.record.key, cn.record.timestamp)
@@ -48,7 +48,7 @@ func (m *memTable) PrintLinkedList() {
 	}
 }
 
-func (m *memTable) Insert(key Key, timestamp Timestamp, data []byte) {
+func (m *skiplistMemTable) Insert(key Key, timestamp Timestamp, data []byte) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -58,7 +58,7 @@ func (m *memTable) Insert(key Key, timestamp Timestamp, data []byte) {
 	m.size += m.nodeMemoryUsage(n)
 }
 
-func (m *memTable) Get(key Key) (data []byte, err error) {
+func (m *skiplistMemTable) Get(key Key) (data []byte, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -69,7 +69,7 @@ func (m *memTable) Get(key Key) (data []byte, err error) {
 	return n.record.data, nil
 }
 
-func (m *memTable) Delete(key Key, timestamp Timestamp) {
+func (m *skiplistMemTable) Delete(key Key, timestamp Timestamp) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -79,18 +79,18 @@ func (m *memTable) Delete(key Key, timestamp Timestamp) {
 	m.size -= m.nodeMemoryUsage(n)
 }
 
-func (m *memTable) Size() uint64 {
+func (m *skiplistMemTable) Size() uint64 {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	return m.size
 }
 
-func (m *memTable) nodeMemoryUsage(n *node) uint64 {
+func (m *skiplistMemTable) nodeMemoryUsage(n *node) uint64 {
 	return uint64(len(n.record.data)) + uint64(MemTableRecordOverhead)
 }
 
-func (m *memTable) insertNode(newNode *node) {
+func (m *skiplistMemTable) insertNode(newNode *node) {
 	var updateList [maxHeight]*node
 	currentNode := m.head
 
@@ -120,7 +120,7 @@ func (m *memTable) insertNode(newNode *node) {
 	}
 }
 
-func (m *memTable) getLatestNode(key Key) *node {
+func (m *skiplistMemTable) getLatestNode(key Key) *node {
 	currentNode := m.head
 	for currentLevel := maxHeight - 1; currentLevel >= 0; currentLevel-- {
 		for {
@@ -156,7 +156,7 @@ func newNode(key Key, timestamp Timestamp, data []byte, isTombstone bool) *node 
 	}
 }
 
-func (m *memTable) getNewHeight() int {
+func (m *skiplistMemTable) getNewHeight() int {
 	height := 1
 	for m.randGen.Intn(branchingFactor) == 0 && height < maxHeight {
 		height += 1
