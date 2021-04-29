@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"sync"
 	"time"
 )
 
@@ -24,10 +25,11 @@ type node struct {
 type memTable struct {
 	head    *node
 	randGen *rand.Rand
+	mu      sync.Mutex
 	size    uint64
 }
 
-func NewSkiplistMemtable() MemTable {
+func NewSkiplistMemtable() *memTable {
 	return &memTable{
 		head: &node{
 			record: MemTableRecord{},
@@ -41,19 +43,65 @@ func NewSkiplistMemtable() MemTable {
 func (m *memTable) PrintLinkedList() {
 	cn := m.head
 	for cn != nil {
-		fmt.Println(cn.record.key)
+		fmt.Println(cn.record.key, cn.record.timestamp)
 		cn = cn.next[0]
 	}
 }
 
 func (m *memTable) Insert(key Key, timestamp Timestamp, data []byte) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	n := newNode(key, timestamp, data, false)
+	m.insertNode(n)
+
+	m.size += m.nodeMemoryUsage(n)
+}
+
+func (m *memTable) Get(key Key) (data []byte, err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	n := m.getLatestNode(key)
+	if n == nil {
+		return []byte{}, KeyNotFound
+	}
+	return n.record.data, nil
+}
+
+func (m *memTable) Delete(key Key, timestamp Timestamp) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	n := newNode(key, timestamp, []byte{}, true)
+	m.insertNode(n)
+
+	m.size -= m.nodeMemoryUsage(n)
+}
+
+func (m *memTable) Size() uint64 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return m.size
+}
+
+func (m *memTable) nodeMemoryUsage(n *node) uint64 {
+	return uint64(len(n.record.data)) + uint64(MemTableRecordOverhead)
+}
+
+func (m *memTable) insertNode(newNode *node) {
 	var updateList [maxHeight]*node
 	currentNode := m.head
 
+	// find insert points
 	for currentLevel := maxHeight - 1; currentLevel >= 0; currentLevel-- {
 		for {
 			next := currentNode.next[currentLevel]
-			if next == nil || !(next.record.key < key || (next.record.key == key && next.record.timestamp < timestamp)) {
+			if next == nil ||
+				!(next.record.key < newNode.record.key ||
+					(next.record.key == newNode.record.key &&
+						next.record.timestamp < newNode.record.timestamp)) {
 				break
 			}
 
@@ -64,22 +112,15 @@ func (m *memTable) Insert(key Key, timestamp Timestamp, data []byte) {
 
 	height := m.getNewHeight()
 
-	newNode := &node{
-		record: MemTableRecord{key: key, data: data, isTombstone: false},
-		next:   make([]*node, maxHeight),
-	}
-
 	for currentLevel := height - 1; currentLevel >= 0; currentLevel-- {
 		prevNode := updateList[currentLevel]
 		nextNode := prevNode.next[currentLevel]
 		prevNode.next[currentLevel] = newNode
 		newNode.next[currentLevel] = nextNode
 	}
-
-	m.size += uint64(len(data)) + uint64(MemTableRecordOverhead)
 }
 
-func (m *memTable) Get(key Key) (data []byte, err error) {
+func (m *memTable) getLatestNode(key Key) *node {
 	currentNode := m.head
 	for currentLevel := maxHeight - 1; currentLevel >= 0; currentLevel-- {
 		for {
@@ -91,21 +132,28 @@ func (m *memTable) Get(key Key) (data []byte, err error) {
 
 			// make sure next is the latest for the searched key
 			if next.record.key == key && (next.next[0] == nil || next.next[0].record.key != key) {
-				return next.record.data, nil
+				if next.record.isTombstone {
+					return nil
+				}
+				return next
 			}
 
 			currentNode = next
 		}
 	}
-	return []byte{}, KeyNotFound
+	return nil
 }
 
-func (m *memTable) Delete(key Key) {
-
-}
-
-func (m *memTable) Size() uint64 {
-	return m.size
+func newNode(key Key, timestamp Timestamp, data []byte, isTombstone bool) *node {
+	return &node{
+		record: MemTableRecord{
+			key:         key,
+			timestamp:   timestamp,
+			data:        data,
+			isTombstone: isTombstone,
+		},
+		next: make([]*node, maxHeight),
+	}
 }
 
 func (m *memTable) getNewHeight() int {
