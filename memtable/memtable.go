@@ -8,7 +8,7 @@ type Timestamp int64
 type MemTable interface {
 	Insert(key Key, timestamp Timestamp, data []byte)
 	Get(key Key) (data []byte, err error)
-	Delete(key Key)
+	Delete(key Key, timestamp Timestamp)
 	Size() uint64
 }
 

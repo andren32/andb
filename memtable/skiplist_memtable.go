@@ -2,7 +2,6 @@ package memtable
 
 import (
 	"errors"
-	"fmt"
 	"math/rand"
 	"sync"
 	"time"
@@ -40,14 +39,6 @@ func NewSkiplistMemtable() *skiplistMemTable {
 	}
 }
 
-func (m *skiplistMemTable) PrintLinkedList() {
-	cn := m.head
-	for cn != nil {
-		fmt.Println(cn.record.key, cn.record.timestamp)
-		cn = cn.next[0]
-	}
-}
-
 func (m *skiplistMemTable) Insert(key Key, timestamp Timestamp, data []byte) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -76,7 +67,7 @@ func (m *skiplistMemTable) Delete(key Key, timestamp Timestamp) {
 	n := newNode(key, timestamp, []byte{}, true)
 	m.insertNode(n)
 
-	m.size -= m.nodeMemoryUsage(n)
+	m.size -= (m.nodeMemoryUsage(n) - uint64(MemTableRecordOverhead))
 }
 
 func (m *skiplistMemTable) Size() uint64 {
