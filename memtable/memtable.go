@@ -1,24 +1,29 @@
 package memtable
 
-import "unsafe"
-
-type Key string
-type Timestamp int64
+import (
+	"andb/core"
+	"errors"
+	"unsafe"
+)
 
 type MemTable interface {
-	Insert(key Key, timestamp Timestamp, data []byte)
-	Get(key Key) (data []byte, err error)
-	Delete(key Key, timestamp Timestamp)
+	Insert(key core.Key, timestamp core.Timestamp, data []byte)
+	Get(key core.Key) (data []byte, err error)
+	Delete(key core.Key, timestamp core.Timestamp)
 	Size() uint64
 }
 
 type MemTableRecord struct {
 	data        []byte
-	key         Key
-	timestamp   Timestamp
+	key         core.Key
+	timestamp   core.Timestamp
 	isTombstone bool
 }
 
 const (
 	MemTableRecordOverhead = unsafe.Sizeof(MemTableRecord{})
+)
+
+var (
+	KeyNotFound = errors.New("Key not found")
 )

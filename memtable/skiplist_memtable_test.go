@@ -1,6 +1,7 @@
 package memtable
 
 import (
+	"andb/core"
 	"fmt"
 	"math/rand"
 	"os"
@@ -17,7 +18,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestAddAndGetData(t *testing.T) {
-	keys := []Key{"key1", "key2", "key3"}
+	keys := []core.Key{"key1", "key2", "key3"}
 	expected := [][]byte{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}}
 
 	memtable := NewSkiplistMemtable()
@@ -54,7 +55,7 @@ func TestDataIsOrderedWhenWrittenConcurrently(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		wg.Add(1)
 		go func(m MemTable, i int, wg *sync.WaitGroup) {
-			memtable.Insert(Key(randString(5, 20)), Timestamp(i), []byte(randString(5, 20)))
+			memtable.Insert(core.Key(randString(5, 20)), core.Timestamp(i), []byte(randString(5, 20)))
 			wg.Done()
 		}(memtable, i, &wg)
 	}

@@ -1,7 +1,7 @@
 package memtable
 
 import (
-	"errors"
+	"andb/core"
 	"math/rand"
 	"sync"
 	"time"
@@ -10,10 +10,6 @@ import (
 const (
 	maxHeight       = 12
 	branchingFactor = 4
-)
-
-var (
-	KeyNotFound = errors.New("Key not found")
 )
 
 type node struct {
@@ -39,7 +35,7 @@ func NewSkiplistMemtable() *skiplistMemTable {
 	}
 }
 
-func (m *skiplistMemTable) Insert(key Key, timestamp Timestamp, data []byte) {
+func (m *skiplistMemTable) Insert(key core.Key, timestamp core.Timestamp, data []byte) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -49,7 +45,7 @@ func (m *skiplistMemTable) Insert(key Key, timestamp Timestamp, data []byte) {
 	m.size += m.nodeMemoryUsage(n)
 }
 
-func (m *skiplistMemTable) Get(key Key) (data []byte, err error) {
+func (m *skiplistMemTable) Get(key core.Key) (data []byte, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -60,7 +56,7 @@ func (m *skiplistMemTable) Get(key Key) (data []byte, err error) {
 	return n.record.data, nil
 }
 
-func (m *skiplistMemTable) Delete(key Key, timestamp Timestamp) {
+func (m *skiplistMemTable) Delete(key core.Key, timestamp core.Timestamp) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -111,7 +107,7 @@ func (m *skiplistMemTable) insertNode(newNode *node) {
 	}
 }
 
-func (m *skiplistMemTable) getLatestNode(key Key) *node {
+func (m *skiplistMemTable) getLatestNode(key core.Key) *node {
 	currentNode := m.head
 	for currentLevel := maxHeight - 1; currentLevel >= 0; currentLevel-- {
 		for {
@@ -135,7 +131,7 @@ func (m *skiplistMemTable) getLatestNode(key Key) *node {
 	return nil
 }
 
-func newNode(key Key, timestamp Timestamp, data []byte, isTombstone bool) *node {
+func newNode(key core.Key, timestamp core.Timestamp, data []byte, isTombstone bool) *node {
 	return &node{
 		record: MemTableRecord{
 			key:         key,
