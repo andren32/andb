@@ -1,9 +1,14 @@
 package wal
 
-import "andb/core"
+import (
+	"andb/core"
+)
 
 // WAL Record
-// Keylength 8 bytes | tombstone 1 byte | valuelength 8 bytes | key | value | timestamp 8 bytes
+// CRC 4 bytes | Payload Length 8 bytes | Payload
+
+// Payload
+// Keylength 4 bytes | tombstone 1 byte | valuelength 4 bytes | key | value | timestamp 8 bytes
 
 type WALRecord struct {
 	value       []byte

@@ -3,6 +3,7 @@ package wal
 import (
 	"bufio"
 	"encoding/binary"
+	"hash/crc32"
 	"os"
 )
 
@@ -22,11 +23,11 @@ func NewWALWriter(path string) (*WALWriter, error) {
 	return &WALWriter{f, writer}, nil
 }
 
-func (w *WALWriter) AddRecord(record *WALRecord) error {
-	keyLength := make([]byte, 8)
-	binary.LittleEndian.PutUint64(keyLength, uint64(len(record.key)))
-	valueLength := make([]byte, 8)
-	binary.LittleEndian.PutUint64(valueLength, uint64(len(record.value)))
+func serializeRecord(record *WALRecord) []byte {
+	keyLength := make([]byte, 4)
+	binary.LittleEndian.PutUint32(keyLength, uint32(len(record.key)))
+	valueLength := make([]byte, 4)
+	binary.LittleEndian.PutUint32(valueLength, uint32(len(record.value)))
 	timestamp := make([]byte, 8)
 	binary.LittleEndian.PutUint64(timestamp, uint64(record.timestamp))
 
@@ -35,32 +36,40 @@ func (w *WALWriter) AddRecord(record *WALRecord) error {
 		tombstone = byte(1)
 	}
 
-	_, err := w.writer.Write(keyLength)
+	recordByteSize := len(record.key) + len(record.value) + 25
+	recordAsBytes := make([]byte, 0, recordByteSize)
+
+	recordAsBytes = append(recordAsBytes, keyLength...)
+	recordAsBytes = append(recordAsBytes, tombstone)
+	recordAsBytes = append(recordAsBytes, valueLength...)
+	recordAsBytes = append(recordAsBytes, []byte(record.key)...)
+	recordAsBytes = append(recordAsBytes, []byte(record.value)...)
+	recordAsBytes = append(recordAsBytes, timestamp...)
+
+	return recordAsBytes
+}
+
+func (w *WALWriter) AddRecord(record *WALRecord) error {
+	serializedRecord := serializeRecord(record)
+	crc := crc32.ChecksumIEEE(serializedRecord)
+
+	crcAsBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(crcAsBytes, crc)
+
+	recordLength := make([]byte, 8)
+	binary.LittleEndian.PutUint64(recordLength, uint64(len(serializedRecord)))
+
+	_, err := w.writer.Write(crcAsBytes)
 	if err != nil {
 		return err
 	}
 
-	err = w.writer.WriteByte(tombstone)
+	_, err = w.writer.Write(recordLength)
 	if err != nil {
 		return err
 	}
 
-	_, err = w.writer.Write(valueLength)
-	if err != nil {
-		return err
-	}
-
-	_, err = w.writer.Write([]byte(record.key))
-	if err != nil {
-		return err
-	}
-
-	_, err = w.writer.Write(record.value)
-	if err != nil {
-		return err
-	}
-
-	_, err = w.writer.Write(timestamp)
+	_, err = w.writer.Write(serializedRecord)
 	if err != nil {
 		return err
 	}

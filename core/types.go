@@ -1,4 +1,4 @@
 package core
 
 type Key string
-type Timestamp int64
+type Timestamp uint64

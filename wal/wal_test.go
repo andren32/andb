@@ -1,6 +1,7 @@
 package wal
 
 import (
+	"bytes"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -50,4 +51,37 @@ func TestAddRecordsAndReadRecords(t *testing.T) {
 	assert.Equal(t, records[3], r4)
 
 	assert.False(t, s.HasNext())
+}
+
+func TestChecksumDetectsCorruptData(t *testing.T) {
+	testDir, err := ioutil.TempDir("", "wal_test")
+	assert.NoError(t, err)
+	defer os.RemoveAll(testDir)
+
+	path := testDir + "file.wal"
+
+	w, err := NewWALWriter(path)
+	assert.NoError(t, err)
+
+	record := &WALRecord{key: "A", value: []byte{1, 2, 3, 4, 5}, timestamp: 0, isTombstone: false}
+
+	w.AddRecord(record)
+
+	w.Flush()
+	w.Close()
+
+	// write a corrupted wal entry
+	data, err := os.ReadFile(path)
+	assert.NoError(t, err)
+
+	data = bytes.Replace(data, []byte{1, 2, 3, 4, 5}, []byte{1, 1, 3, 4, 5}, 1)
+
+	err = os.WriteFile(path, data, 0666)
+	assert.NoError(t, err)
+
+	s, err := NewWALScanner(path)
+
+	r, err := s.ReadRecord()
+	assert.Nil(t, r)
+	assert.ErrorIs(t, err, ChecksumError)
 }

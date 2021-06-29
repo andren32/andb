@@ -4,6 +4,8 @@ import (
 	"andb/core"
 	"bufio"
 	"encoding/binary"
+	"errors"
+	"hash/crc32"
 	"io"
 	"os"
 )
@@ -12,6 +14,10 @@ type WALScanner struct {
 	file   *os.File
 	reader *bufio.Reader
 }
+
+var (
+	ChecksumError = errors.New("Checksum did not match record payload")
+)
 
 func NewWALScanner(path string) (*WALScanner, error) {
 	f, err := os.Open(path)
@@ -24,54 +30,50 @@ func NewWALScanner(path string) (*WALScanner, error) {
 	return &WALScanner{f, reader}, nil
 }
 
-func (s *WALScanner) ReadRecord() (*WALRecord, error) {
-	rawKeyLength := make([]byte, 8)
-	_, err := io.ReadFull(s.reader, rawKeyLength)
-	if err != nil {
-		return nil, err
-	}
+func deserializeRecord(rawPayload []byte) (*WALRecord, error) {
+	keyLength := binary.LittleEndian.Uint32(rawPayload[0:4])
+	tombstone := rawPayload[4]
+	valueLength := binary.LittleEndian.Uint32(rawPayload[5:9])
 
-	rawTombstone, err := s.reader.ReadByte()
-	if err != nil {
-		return nil, err
-	}
-
-	rawValuelength := make([]byte, 8)
-	_, err = io.ReadFull(s.reader, rawValuelength)
-	if err != nil {
-		return nil, err
-	}
-
-	keyLength := binary.LittleEndian.Uint64(rawKeyLength)
-	valueLength := binary.LittleEndian.Uint64(rawValuelength)
-
-	key := make([]byte, keyLength)
-	value := make([]byte, valueLength)
-
-	_, err = io.ReadFull(s.reader, key)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = io.ReadFull(s.reader, value)
-	if err != nil {
-		return nil, err
-	}
-
-	rawTimestamp := make([]byte, 8)
-	_, err = io.ReadFull(s.reader, rawTimestamp)
-	if err != nil {
-		return nil, err
-	}
-
-	timestamp := binary.LittleEndian.Uint64(rawTimestamp)
+	key := rawPayload[9 : 9+keyLength]
+	value := rawPayload[9+keyLength : 9+keyLength+valueLength]
+	timestamp := binary.LittleEndian.Uint64(rawPayload[9+keyLength+valueLength : 9+keyLength+valueLength+8])
 
 	return &WALRecord{
 		key:         core.Key(key),
 		value:       value,
 		timestamp:   core.Timestamp(timestamp),
-		isTombstone: rawTombstone > 0,
+		isTombstone: tombstone > 0,
 	}, nil
+}
+
+func (s *WALScanner) ReadRecord() (*WALRecord, error) {
+	rawCRC := make([]byte, 4)
+	_, err := io.ReadFull(s.reader, rawCRC)
+	if err != nil {
+		return nil, err
+	}
+
+	rawRecordLength := make([]byte, 8)
+	_, err = io.ReadFull(s.reader, rawRecordLength)
+	if err != nil {
+		return nil, err
+	}
+	recordLength := binary.LittleEndian.Uint64(rawRecordLength)
+
+	rawPayload := make([]byte, recordLength)
+	_, err = io.ReadFull(s.reader, rawPayload)
+	if err != nil {
+		return nil, err
+	}
+
+	crc := binary.LittleEndian.Uint32(rawCRC)
+	if crc != crc32.ChecksumIEEE(rawPayload) {
+		return nil, ChecksumError
+	}
+
+	return deserializeRecord(rawPayload)
+
 }
 
 func (s *WALScanner) HasNext() bool {
