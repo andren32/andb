@@ -28,8 +28,8 @@ func serializeRecord(record *WALRecord) []byte {
 	binary.LittleEndian.PutUint32(keyLength, uint32(len(record.key)))
 	valueLength := make([]byte, 4)
 	binary.LittleEndian.PutUint32(valueLength, uint32(len(record.value)))
-	timestamp := make([]byte, 8)
-	binary.LittleEndian.PutUint64(timestamp, uint64(record.timestamp))
+	sequenceNumber := make([]byte, 8)
+	binary.LittleEndian.PutUint64(sequenceNumber, uint64(record.sequenceNumber))
 
 	tombstone := byte(0)
 	if record.isTombstone {
@@ -44,7 +44,7 @@ func serializeRecord(record *WALRecord) []byte {
 	recordAsBytes = append(recordAsBytes, valueLength...)
 	recordAsBytes = append(recordAsBytes, []byte(record.key)...)
 	recordAsBytes = append(recordAsBytes, []byte(record.value)...)
-	recordAsBytes = append(recordAsBytes, timestamp...)
+	recordAsBytes = append(recordAsBytes, sequenceNumber...)
 
 	return recordAsBytes
 }
@@ -77,8 +77,12 @@ func (w *WALWriter) AddRecord(record *WALRecord) error {
 	return err
 }
 
-func (w *WALWriter) Flush() {
-	w.writer.Flush()
+func (w *WALWriter) Flush() error {
+	return w.writer.Flush()
+}
+
+func (w *WALWriter) Sync() error {
+	return w.file.Sync()
 }
 
 func (w *WALWriter) Close() {

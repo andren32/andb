@@ -3,7 +3,6 @@ package memtable
 import (
 	"andb/core"
 	"math/rand"
-	"sync"
 	"time"
 )
 
@@ -20,7 +19,6 @@ type node struct {
 type skiplistMemTable struct {
 	head    *node
 	randGen *rand.Rand
-	mu      sync.Mutex
 	size    uint64
 }
 
@@ -35,20 +33,14 @@ func NewSkiplistMemtable() *skiplistMemTable {
 	}
 }
 
-func (m *skiplistMemTable) Insert(key core.Key, timestamp core.Timestamp, data []byte) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	n := newNode(key, timestamp, data, false)
+func (m *skiplistMemTable) Insert(key core.Key, sequenceNumber core.SequenceNumber, data []byte) {
+	n := newNode(key, sequenceNumber, data, false)
 	m.insertNode(n)
 
 	m.size += m.nodeMemoryUsage(n)
 }
 
 func (m *skiplistMemTable) Get(key core.Key) (data []byte, err error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	n := m.getLatestNode(key)
 	if n == nil {
 		return []byte{}, KeyNotFound
@@ -56,20 +48,14 @@ func (m *skiplistMemTable) Get(key core.Key) (data []byte, err error) {
 	return n.record.data, nil
 }
 
-func (m *skiplistMemTable) Delete(key core.Key, timestamp core.Timestamp) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	n := newNode(key, timestamp, []byte{}, true)
+func (m *skiplistMemTable) Delete(key core.Key, sequenceNumber core.SequenceNumber) {
+	n := newNode(key, sequenceNumber, []byte{}, true)
 	m.insertNode(n)
 
 	m.size -= (m.nodeMemoryUsage(n) - uint64(MemTableRecordOverhead))
 }
 
 func (m *skiplistMemTable) Size() uint64 {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	return m.size
 }
 
@@ -88,7 +74,7 @@ func (m *skiplistMemTable) insertNode(newNode *node) {
 			if next == nil ||
 				!(next.record.key < newNode.record.key ||
 					(next.record.key == newNode.record.key &&
-						next.record.timestamp < newNode.record.timestamp)) {
+						next.record.sequenceNumber < newNode.record.sequenceNumber)) {
 				break
 			}
 
@@ -131,13 +117,13 @@ func (m *skiplistMemTable) getLatestNode(key core.Key) *node {
 	return nil
 }
 
-func newNode(key core.Key, timestamp core.Timestamp, data []byte, isTombstone bool) *node {
+func newNode(key core.Key, sequenceNumber core.SequenceNumber, data []byte, isTombstone bool) *node {
 	return &node{
 		record: MemTableRecord{
-			key:         key,
-			timestamp:   timestamp,
-			data:        data,
-			isTombstone: isTombstone,
+			key:            key,
+			sequenceNumber: sequenceNumber,
+			data:           data,
+			isTombstone:    isTombstone,
 		},
 		next: make([]*node, maxHeight),
 	}

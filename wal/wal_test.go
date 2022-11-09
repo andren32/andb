@@ -18,10 +18,10 @@ func TestAddRecordsAndReadRecords(t *testing.T) {
 	assert.NoError(t, err)
 
 	records := []*WALRecord{
-		{key: "A", value: []byte{1, 2}, timestamp: 0, isTombstone: false},
-		{key: "B", value: []byte{3, 4, 5, 6}, timestamp: 1, isTombstone: false},
-		{key: "C", value: []byte{7, 8, 9, 10, 11}, timestamp: 2, isTombstone: false},
-		{key: "B", value: []byte{}, timestamp: 3, isTombstone: true},
+		{key: "A", value: []byte{1, 2}, sequenceNumber: 0, isTombstone: false},
+		{key: "B", value: []byte{3, 4, 5, 6}, sequenceNumber: 1, isTombstone: false},
+		{key: "C", value: []byte{7, 8, 9, 10, 11}, sequenceNumber: 2, isTombstone: false},
+		{key: "B", value: []byte{}, sequenceNumber: 3, isTombstone: true},
 	}
 
 	for _, record := range records {
@@ -63,7 +63,7 @@ func TestChecksumDetectsCorruptData(t *testing.T) {
 	w, err := NewWALWriter(path)
 	assert.NoError(t, err)
 
-	record := &WALRecord{key: "A", value: []byte{1, 2, 3, 4, 5}, timestamp: 0, isTombstone: false}
+	record := &WALRecord{key: "A", value: []byte{1, 2, 3, 4, 5}, sequenceNumber: 0, isTombstone: false}
 
 	w.AddRecord(record)
 

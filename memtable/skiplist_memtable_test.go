@@ -2,6 +2,7 @@ package memtable
 
 import (
 	"andb/core"
+	"andb/test_utils"
 	"fmt"
 	"math/rand"
 	"os"
@@ -55,28 +56,28 @@ func TestDataIsOrderedWhenWrittenConcurrently(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		wg.Add(1)
 		go func(m MemTable, i int, wg *sync.WaitGroup) {
-			memtable.Insert(core.Key(randString(5, 20)), core.Timestamp(i), []byte(randString(5, 20)))
+			memtable.Insert(core.Key(test_utils.RandString(5, 20)), core.SequenceNumber(i), []byte(test_utils.RandString(5, 20)))
 			wg.Done()
 		}(memtable, i, &wg)
 	}
 
 	wg.Wait()
 	lastNode := memtable.head.next[0]
-	cn := memtable.head.next[0].next[0]
-	for cn != nil {
-		assert.GreaterOrEqual(t, cn.record.key, lastNode.record.key)
-		if cn.record.key == lastNode.record.key {
-			assert.GreaterOrEqual(t, cn.record.timestamp, lastNode.record.timestamp)
+	currentNode := memtable.head.next[0].next[0]
+	for currentNode != nil {
+		assert.GreaterOrEqual(t, currentNode.record.key, lastNode.record.key)
+		if currentNode.record.key == lastNode.record.key {
+			assert.GreaterOrEqual(t, currentNode.record.sequenceNumber, lastNode.record.sequenceNumber)
 		}
-
-		cn = cn.next[0]
+		lastNode = currentNode
+		currentNode = currentNode.next[0]
 	}
 }
 
 func (m *skiplistMemTable) PrintLinkedList() {
 	cn := m.head.next[0]
 	for cn != nil {
-		fmt.Println(cn.record.key, cn.record.timestamp, cn.record.data)
+		fmt.Println(cn.record.key, cn.record.sequenceNumber, cn.record.data)
 		cn = cn.next[0]
 	}
 }
@@ -100,15 +101,4 @@ func TestDeleteKey(t *testing.T) {
 
 	_, err = memtable.Get("key")
 	assert.ErrorIs(t, err, KeyNotFound)
-}
-
-var letters = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-func randString(minLength int, maxLength int) string {
-	length := rand.Intn(maxLength-minLength) + minLength
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = letters[rand.Intn(len(letters))]
-	}
-	return string(b)
 }

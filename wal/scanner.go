@@ -37,13 +37,13 @@ func deserializeRecord(rawPayload []byte) (*WALRecord, error) {
 
 	key := rawPayload[9 : 9+keyLength]
 	value := rawPayload[9+keyLength : 9+keyLength+valueLength]
-	timestamp := binary.LittleEndian.Uint64(rawPayload[9+keyLength+valueLength : 9+keyLength+valueLength+8])
+	sequenceNumber := binary.LittleEndian.Uint64(rawPayload[9+keyLength+valueLength : 9+keyLength+valueLength+8])
 
 	return &WALRecord{
-		key:         core.Key(key),
-		value:       value,
-		timestamp:   core.Timestamp(timestamp),
-		isTombstone: tombstone > 0,
+		key:            core.Key(key),
+		value:          value,
+		sequenceNumber: core.SequenceNumber(sequenceNumber),
+		isTombstone:    tombstone > 0,
 	}, nil
 }
 
@@ -73,7 +73,6 @@ func (s *WALScanner) ReadRecord() (*WALRecord, error) {
 	}
 
 	return deserializeRecord(rawPayload)
-
 }
 
 func (s *WALScanner) HasNext() bool {
