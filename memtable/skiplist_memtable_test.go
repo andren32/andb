@@ -53,7 +53,7 @@ func TestGetsTheLatestDataForSameKey(t *testing.T) {
 func TestDataIsOrderedWhenWrittenConcurrently(t *testing.T) {
 	memtable := NewSkiplistMemtable()
 	var wg sync.WaitGroup
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 10000; i++ {
 		wg.Add(1)
 		go func(m MemTable, i int, wg *sync.WaitGroup) {
 			memtable.Insert(core.Key(test_utils.RandString(5, 20)), core.SequenceNumber(i), []byte(test_utils.RandString(5, 20)))

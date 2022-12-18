@@ -1,9 +1,9 @@
 package wal
 
 import (
+	"andb/core"
 	"bufio"
 	"encoding/binary"
-	"hash/crc32"
 	"os"
 )
 
@@ -51,15 +51,13 @@ func serializeRecord(record *WALRecord) []byte {
 
 func (w *WALWriter) AddRecord(record *WALRecord) error {
 	serializedRecord := serializeRecord(record)
-	crc := crc32.ChecksumIEEE(serializedRecord)
 
-	crcAsBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(crcAsBytes, crc)
+	crc := core.CRCForSlice(serializedRecord)
 
 	recordLength := make([]byte, 8)
 	binary.LittleEndian.PutUint64(recordLength, uint64(len(serializedRecord)))
 
-	_, err := w.writer.Write(crcAsBytes)
+	_, err := w.writer.Write(crc)
 	if err != nil {
 		return err
 	}
@@ -86,6 +84,7 @@ func (w *WALWriter) Sync() error {
 }
 
 func (w *WALWriter) Close() {
-	w.writer.Flush()
+	w.Flush()
+	w.Sync()
 	w.file.Close()
 }
